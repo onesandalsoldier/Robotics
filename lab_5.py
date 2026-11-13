@@ -579,7 +579,12 @@ def in_collision(n1, n2):
 # Hint: random.uniform(a, b)
 # =====================================================================
 def get_random_expansion(n):
-    pass  # TODO: replace this with your implementation (4 or 5 lines)
+    random_heading = random.uniform(-DTHETA_MAX_RAD, DTHETA_MAX_RAD)
+    random_radius = random.uniform(R_MIN_M, R_MAX_M)
+    X_new = arc_end(n.X, random_radius, random_heading)
+    u_new = [V_MAX_M_S, random_radius, random_heading]
+    return Node(X_new, n, u_new)
+
 
 
 # =====================================================================
@@ -616,8 +621,25 @@ def get_random_expansion(n):
 #   P_d = [0.1, 0.3]  -> False: r = (0.01 + 0.09) / 0.6 = 0.167 m < R_MIN_M
 #   P_d = [-0.1, 0.0] -> False: behind the robot
 # =====================================================================
-def in_end_game_region(n, P_d):
-    pass  # TODO: replace this with your implementation
+def in_end_game_region(n, P_d): 
+    dx =  math.cos(n.X[2]) * (P_d[0] - n.X[0]) + math.sin(n.X[2]) * (P_d[1] - n.X[1])
+    dy = -math.sin(n.X[2]) * (P_d[0] - n.X[0]) + math.cos(n.X[2]) * (P_d[1] - n.X[1])
+    if dx <= 0:
+        return False, None
+    if abs(dy) < 1e-9:
+        dy = 1e-9
+    r = (dx**2 + dy**2) / (2 * abs(dy))
+    dtheta = 2 * math.atan2(dy, dx)
+    if r < R_MIN_M:
+        return False, None
+    u = [V_MAX_M_S, r, dtheta]
+    goal_node = Node(arc_end(n.X, r, dtheta), n, u)
+    if in_collision(n, goal_node):
+        return False, None
+    else:
+        return True, u
+
+    
 
 
 # =====================================================================
@@ -628,7 +650,13 @@ def in_end_game_region(n, P_d):
 # Returns T = [X_0, X_1, ..., X_d] (list of states, root first).
 # =====================================================================
 def build_trajectory(n):
-    pass  # TODO: replace this with your implementation
+    T = []
+    while n is not None:
+        T.append(n.X)
+        n=n.parent
+    T = T[::-1]
+    return T
+     
 
 
 # =====================================================================
@@ -665,7 +693,30 @@ def build_trajectory(n):
 #   - the first line of the function must be:  global LAST_PRM
 # =====================================================================
 def sq_prm_planner(X_0, P_d):
-    pass  # TODO: replace this with your implementation
+    global LAST_PRM 
+    current_prm = PRM()
+    LAST_PRM = current_prm
+    if point_in_collision(X_0[0], X_0[1]) or point_in_collision(P_d[0], P_d[1]):
+        return None
+    root_node = Node(list(X_0), None, None)
+    current_prm.add(root_node)
+    end_bool, end_u = in_end_game_region(root_node, P_d)
+    if end_bool:
+        goal_node = Node(arc_end(root_node.X, end_u[1], end_u[2]), root_node, end_u)
+        return build_trajectory(goal_node)
+    for counter in range(MAX_EXPANSIONS):
+        n_random = get_random_node(current_prm)
+        n_new = get_random_expansion(n_random)
+        if in_collision(n_random, n_new):
+            continue
+        current_prm.add(n_new)
+        end_bool, end_u = in_end_game_region(n_new, P_d)
+        if end_bool:
+            goal_node = Node(arc_end(root_node.X, end_u[1], end_u[2]), root_node, end_u)
+            return build_trajectory(goal_node) 
+    return None
+
+    
 
 
 # =====================================================================
@@ -695,7 +746,13 @@ def prm_unit_test_1():
 # Return (passed, T, "circles_sim"), like test 1.
 # =====================================================================
 def prm_unit_test_2():
-    pass  # TODO: replace this with your implementation
+    load_map("circle_sim")
+    X_0, P_d = [0.0, 0.0, 0.0, 0.0], [1.5, 0]
+    T = sq_prm_planner(X_0, P_d)
+    ok, msg = check_trajectory(T, X_0, P_d)
+    if not ok and len(T) <= 2:
+        print(f"    test 2: {msg}")
+    return ok, T, "circle_sim"
 
 
 # =====================================================================
@@ -709,8 +766,13 @@ def prm_unit_test_2():
 # Return (passed, T, "empty").
 # =====================================================================
 def prm_unit_test_3():
-    pass  # TODO: replace this with your implementation
-
+    load_map("empty")
+    X_0, P_d = [0.0, 0.0, 0.0, 0.0], [-0.05, 1.0]
+    T = sq_prm_planner(X_0, P_d)
+    ok, msg = check_trajectory(T, X_0, P_d)
+    if not ok and math.sqrt(((P_d[0] - X_0[0])**2+(P_d[1] - X_0[1]))**2) / V_MAX_M_S >= trajectory_duration(T):
+        print(f"    test 3: {msg}")
+    return ok, T, "empty"
 
 # PROVIDED - runs the 3 tests, prints the result and plots the trajectories.
 def run_prm_unit_tests(plot=True):
@@ -759,7 +821,19 @@ def run_prm_unit_tests(plot=True):
 #       time.perf_counter() - t_start = time spent so far.
 # =====================================================================
 def get_best_trajectory(X_0, P_d, t_plan):
-    pass  # TODO: replace this with your implementation
+    lowest_loop_traj_time = 0 
+    t_start = time.perf_counter() 
+    while True:
+        if time.perf_counter() - t_start <= t_plan:
+            loop_traj = sq_prm_planner(X_0, P_d)
+            loop_traj_time = trajectory_duration(loop_traj)
+            if loop_traj_time > lowest_loop_traj_time:
+                lowest_loop_traj_time = loop_traj_time
+        else:
+            if lowest_loop_traj_time == 0:
+                return False, None
+            return lowest_loop_traj_time
+
 
 
 # PROVIDED - compares one sq_prm_planner call with get_best_trajectory.
@@ -793,9 +867,7 @@ TRAJ_LOOKAHEAD_S = 1.0          # s, the Delta t of Lecture 06A (you may tune it
 # =====================================================================
 # STUDENT TODO - Step 1: trajectory_tracking_controller
 # =====================================================================
-# Same as Lab 4. The ONLY difference: a state of T is now [x, y, theta, t]
-# (Lab 4: [t, x, y, theta]). So the time stamp of T[j] is T[j][3], and
-# the pose for your point tracker is T[j][:3].
+# Same as Lab 4. 
 #
 # At each time step t (Lecture 06A):
 #   1. find the pose p_t on T that has the same time stamp as t
@@ -803,8 +875,63 @@ TRAJ_LOOKAHEAD_S = 1.0          # s, the Delta t of Lecture 06A (you may tune it
 #      along T (the last pose of T if the trajectory is over)
 #   3. return the wheel speeds of point_tracking_controller(p_des,t, X)
 # =====================================================================
+TURN_IN_PLACE_RAD = math.radians(100)   # if the aim point is more than this far off the
+                                       # robot's heading, turn in place (never reverse)
+MAX_WHEEL_SPEED_RAD_S = 7.0   # rad/s. From pwm_calibration_20261008_125131.csv: at PWM 255 the slowest
+MAX_TURN_RATE_RAD_S = 1.2
+MAX_AIM_AHEAD_CELLS = 20    # rad/s (69 deg/s), see the comment in the file              # wheel/direction reaches 7.76 rad/s (right wheel, backward); 90% of that
+                              # leaves room for the wheel speed controller to correct
+def scale_to_max_wheel_speed(phi_l, phi_r):
+    factor = 1.0
+
+    # 1. no wheel faster than the robot can drive it
+    biggest = max(abs(phi_l), abs(phi_r))
+    if biggest > MAX_WHEEL_SPEED_RAD_S:
+        factor = MAX_WHEEL_SPEED_RAD_S / biggest
+
+    # 2. no turn faster than MAX_TURN_RATE_RAD_S
+    v, w = get_robot_velocities(phi_l, phi_r)
+    if abs(w) * factor > MAX_TURN_RATE_RAD_S:
+        factor = MAX_TURN_RATE_RAD_S / abs(w)
+
+    return phi_l * factor, phi_r * factor
+
+
 def trajectory_tracking_controller(T, X, t):
-    pass  # TODO: replace this with your implementation (copy from lab_4.py and adapt)
+    if len(T) == 0:
+        return 0.0, 0.0
+
+    # 1. p_t: first pose whose time stamp is at or after t
+    k = 0
+    while k < len(T) - 1 and T[k][0] < t:
+        k = k + 1
+
+    # 2. p_des,t: first pose TRAJ_LOOKAHEAD_S further in time than p_t
+    k_des = k
+    while k_des < len(T) - 1 and T[k_des][0] < T[k][0] + TRAJ_LOOKAHEAD_S:
+        k_des = k_des + 1
+
+    closest = 0
+    best_dist = math.inf
+    for i in range(k_des + 1):
+        d = math.hypot(T[i][1] - X[0], T[i][2] - X[1])
+        if d < best_dist:
+            best_dist = d
+            closest = i
+    if k_des > closest + MAX_AIM_AHEAD_CELLS:
+        k_des = closest + MAX_AIM_AHEAD_CELLS
+    p_des = T[k_des]
+
+    # 3. never reverse: if the aim point is far off the heading, turn in place
+    dx = p_des[1] - X[0]
+    dy = p_des[2] - X[1]
+    alpha = wrap_angle(math.atan2(dy, dx) - X[2])
+    if math.hypot(dx, dy) > 0.02 and abs(alpha) > TURN_IN_PLACE_RAD:
+        phi_l, phi_r = get_wheel_velocities(0.0, 3.0 * alpha)
+        return scale_to_max_wheel_speed(phi_l, phi_r)
+
+    phi_l, phi_r = point_tracking_controller(p_des[1:], X)
+    return scale_to_max_wheel_speed(phi_l, phi_r)
 
 
 # =====================================================================

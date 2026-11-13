@@ -69,10 +69,11 @@ csv_writer = None
 # =====================================================================
 # STUDENT TODO - ROBOT CONSTANTS (copy from gui_4.py, same as in lab_5.py)
 # =====================================================================
-TICKS_PER_REV_LEFT = None     # left wheel (encoder A)
-TICKS_PER_REV_RIGHT = None    # right wheel (encoder B)
-WHEEL_RADIUS_M = None          # m
-WHEELBASE_M = None          # m, distance between the wheels (= 2L)
+TICKS_PER_REV_LEFT = 372.5  # left wheel (encoder A)
+TICKS_PER_REV_RIGHT =  372.000 # right wheel (encoder B)
+WHEEL_RADIUS_M =     0.0335       # m
+WHEEL_RADIUS_RIGHT_M = WHEEL_RADIUS_M   # right wheel travels 2% farther per rotation than the left
+WHEELBASE_M =     0.175
 
 # --- ODOMETRY STATE (Lab 2) ---
 robot_state = [0.0, 0.0, 0.0]      # [x_m, y_m, theta_rad], encoder-only estimate

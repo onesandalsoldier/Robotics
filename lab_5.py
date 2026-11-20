@@ -71,6 +71,7 @@ QUICK PYTHON REMINDERS (you have no internet: everything you need is here)
 import math
 import random
 import time
+from turtle import circle
 import numpy as np
 import map_5
 
@@ -712,7 +713,7 @@ def sq_prm_planner(X_0, P_d):
         current_prm.add(n_new)
         end_bool, end_u = in_end_game_region(n_new, P_d)
         if end_bool:
-            goal_node = Node(arc_end(root_node.X, end_u[1], end_u[2]), root_node, end_u)
+            goal_node = Node(arc_end(n_new.X, end_u[1], end_u[2]), n_new, end_u)
             return build_trajectory(goal_node) 
     return None
 
@@ -746,13 +747,13 @@ def prm_unit_test_1():
 # Return (passed, T, "circles_sim"), like test 1.
 # =====================================================================
 def prm_unit_test_2():
-    load_map("circle_sim")
+    load_map("circles_sim")
     X_0, P_d = [0.0, 0.0, 0.0, 0.0], [1.5, 0]
     T = sq_prm_planner(X_0, P_d)
     ok, msg = check_trajectory(T, X_0, P_d)
     if not ok and len(T) <= 2:
         print(f"    test 2: {msg}")
-    return ok, T, "circle_sim"
+    return ok, T, "circles_sim"
 
 
 # =====================================================================
@@ -898,23 +899,26 @@ def scale_to_max_wheel_speed(phi_l, phi_r):
 
 
 def trajectory_tracking_controller(T, X, t):
+    
+
+
     if len(T) == 0:
         return 0.0, 0.0
 
     # 1. p_t: first pose whose time stamp is at or after t
     k = 0
-    while k < len(T) - 1 and T[k][0] < t:
+    while k < len(T) - 1 and T[k][3] < t:
         k = k + 1
 
     # 2. p_des,t: first pose TRAJ_LOOKAHEAD_S further in time than p_t
     k_des = k
-    while k_des < len(T) - 1 and T[k_des][0] < T[k][0] + TRAJ_LOOKAHEAD_S:
+    while k_des < len(T) - 1 and T[k_des][3] < T[k][3] + TRAJ_LOOKAHEAD_S:
         k_des = k_des + 1
 
     closest = 0
     best_dist = math.inf
     for i in range(k_des + 1):
-        d = math.hypot(T[i][1] - X[0], T[i][2] - X[1])
+        d = math.hypot(T[i][0] - X[0], T[i][1] - X[1])
         if d < best_dist:
             best_dist = d
             closest = i
@@ -923,14 +927,14 @@ def trajectory_tracking_controller(T, X, t):
     p_des = T[k_des]
 
     # 3. never reverse: if the aim point is far off the heading, turn in place
-    dx = p_des[1] - X[0]
-    dy = p_des[2] - X[1]
+    dx = p_des[0] - X[0]
+    dy = p_des[1] - X[1]
     alpha = wrap_angle(math.atan2(dy, dx) - X[2])
     if math.hypot(dx, dy) > 0.02 and abs(alpha) > TURN_IN_PLACE_RAD:
         phi_l, phi_r = get_wheel_velocities(0.0, 3.0 * alpha)
         return scale_to_max_wheel_speed(phi_l, phi_r)
 
-    phi_l, phi_r = point_tracking_controller(p_des[1:], X)
+    phi_l, phi_r = point_tracking_controller(p_des[:3], X)
     return scale_to_max_wheel_speed(phi_l, phi_r)
 
 
@@ -981,7 +985,17 @@ def traj_tracker_unit_test_1():
 # discuss the tracking error.
 # =====================================================================
 def traj_tracker_unit_test_2():
-    pass  # TODO: replace this with your implementation
+    load_map("gap_sim")
+    X_0, P_d = [0.0, 0.0, 0.0, 0.0], [1.5, 0.0]
+    T = get_best_trajectory(X_0, P_d, 0.5)
+    if not T:
+        print("  gap_sim: sq_prm_planner or get_best_trajectory not written yet")
+        return False, [], [], "gap_sim"
+    reached, visited, t, max_err = simulate_trajectory(T, X_0)
+    hit = any(robot_in_collision(p) for p in visited)
+    print(f"  gap_sim: planned {trajectory_duration(T):.1f} s, took {t:.1f} s, "
+          f"max tracking error {max_err:.3f} m, collision {hit}")
+    return reached and not hit, T, visited, "gap_sim"
 
 
 # PROVIDED - runs the 2 tests, prints the result and plots the paths.
@@ -1045,7 +1059,26 @@ def random_free_position(clearance=C_SPACE_RADIUS_M):
 #      while it is too close)
 # =====================================================================
 def make_random_plan_scene(n_obstacles, radius):
-    pass  # TODO: replace this with your implementation
+    X_0 = None
+    P_d = None
+    while X_0 is None:
+        circle_list = []
+        for k in range(n_obstacles):
+            random_center_x,  random_center_y = random.uniform(map_5.X_MIN, map_5.X_MAX), random.uniform(map_5.Y_MIN, map_5.Y_MAX)
+            circle_list.append([random_center_x, random_center_y, radius])
+        scene = {"walls":map_5.BOUNDARY_WALLS, "circles":circle_list}
+        load_scene(scene)
+        pos = random_free_position(C_SPACE_RADIUS_M + R_MIN_M), random.uniform(-math.pi, math.pi)
+        if pos is not None:
+            X_0 = [pos[0], pos[1], random.uniform(-math.pi,math.pi), 0.0]
+
+    P_d = random_free_position()
+    while math.hypot(P_d[0] - X_0[0], P_d[1] - X_0[1]) < 0.5:
+        P_d = random_free_position()
+    scene["X_0"] = X_0
+    scene["P_d"] = P_d
+    return scene
+    
 
 
 # =====================================================================
@@ -1078,7 +1111,27 @@ T_PLANS = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
 
 
 def run_planning_time_analysis(n_obstacles=4, radius=0.15, n_scenes=100, plot=True):
-    pass  # TODO: replace this with your implementation
+    T_PLANS = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
+    for k in range(100):
+        scene = make_random_plan_scene(n_obstacles, radius)
+        traj_duration = None
+        traj_duration_list = []
+        for t_plan in T_PLANS:
+            traj_duration = get_best_trajectory(scene["X_0"], scene["P_d"], t_plan)
+            if traj_duration == None:
+                traj_duration_list.append(None)
+            else:
+                traj_duration_list.append(traj_duration)
+    mean_sum = 0
+    successful_trajs_length = 0
+    for k in traj_duration_list:
+        if traj_duration != None:
+            mean_sum += traj_duration_list[k]
+            successful_trajs_length += 1
+    mean_duration = mean_sum / successful_trajs_length
+    success_rate = mean_sum  / len(traj_duration_list)
+    return mean_duration
+
 
 
 # =====================================================================

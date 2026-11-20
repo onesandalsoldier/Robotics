@@ -822,18 +822,21 @@ def run_prm_unit_tests(plot=True):
 #       time.perf_counter() - t_start = time spent so far.
 # =====================================================================
 def get_best_trajectory(X_0, P_d, t_plan):
-    lowest_loop_traj_time = 0 
+    lowest_loop_traj_time = math.inf
+    lowest_loop_traj = None
     t_start = time.perf_counter() 
     while True:
         if time.perf_counter() - t_start <= t_plan:
             loop_traj = sq_prm_planner(X_0, P_d)
-            loop_traj_time = trajectory_duration(loop_traj)
-            if loop_traj_time > lowest_loop_traj_time:
-                lowest_loop_traj_time = loop_traj_time
-        else:
-            if lowest_loop_traj_time == 0:
-                return False, None
-            return lowest_loop_traj_time
+            if loop_traj == None:
+                return None
+            else:
+                loop_traj_time = trajectory_duration(loop_traj)
+                if loop_traj_time < lowest_loop_traj_time:
+                    lowest_loop_traj_time = loop_traj_time
+                    lowest_loop_traj = loop_traj
+        return lowest_loop_traj
+
 
 
 
@@ -1068,7 +1071,7 @@ def make_random_plan_scene(n_obstacles, radius):
             circle_list.append([random_center_x, random_center_y, radius])
         scene = {"walls":map_5.BOUNDARY_WALLS, "circles":circle_list}
         load_scene(scene)
-        pos = random_free_position(C_SPACE_RADIUS_M + R_MIN_M), random.uniform(-math.pi, math.pi)
+        pos = random_free_position(C_SPACE_RADIUS_M + R_MIN_M)
         if pos is not None:
             X_0 = [pos[0], pos[1], random.uniform(-math.pi,math.pi), 0.0]
 
@@ -1112,26 +1115,51 @@ T_PLANS = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
 
 def run_planning_time_analysis(n_obstacles=4, radius=0.15, n_scenes=100, plot=True):
     T_PLANS = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
-    for k in range(100):
+    all_traj_durations = []
+    for k in range(n_scenes):
         scene = make_random_plan_scene(n_obstacles, radius)
-        traj_duration = None
-        traj_duration_list = []
+        best_traj = None
+        traj_duration_list = [] # = scene?
         for t_plan in T_PLANS:
-            traj_duration = get_best_trajectory(scene["X_0"], scene["P_d"], t_plan)
-            if traj_duration == None:
+            best_traj = get_best_trajectory(scene["X_0"], scene["P_d"], t_plan)
+            if best_traj == None:
                 traj_duration_list.append(None)
             else:
-                traj_duration_list.append(traj_duration)
-    mean_sum = 0
-    successful_trajs_length = 0
-    for k in traj_duration_list:
-        if traj_duration != None:
-            mean_sum += traj_duration_list[k]
-            successful_trajs_length += 1
-    mean_duration = mean_sum / successful_trajs_length
-    success_rate = mean_sum  / len(traj_duration_list)
-    return mean_duration
+                traj_duration_list.append(trajectory_duration(best_traj))
+        all_traj_durations.append(traj_duration_list)
+    mean_list = []
+    success_rate_list = []
+    fair_list = []
 
+    for scene in range(len(all_traj_durations)):
+        fair_condition = True
+        for l in range(len(T_PLANS)):
+            if all_traj_durations[scene][l] == None:
+                fair_condition = False
+        if fair_condition == False:
+            fair_list.append(False)
+        elif fair_condition == True:
+            fair_list.append(True)   
+    for i in range(len(T_PLANS)):
+        mean_sum = 0
+        fair_num = 0
+        successful_num = 0
+        for scene in range(len(all_traj_durations)):
+            if all_traj_durations[scene][i] != None:
+                successful_num += 1
+            if fair_list[scene] == True:
+                fair_num += 1
+                mean_sum += all_traj_durations[scene][i]
+        mean_list.append((mean_sum / fair_num))
+        success_rate_list.append(((successful_num / n_scenes) * 100))
+    for i in range(len(T_PLANS)):
+        print("T_Plan:", T_PLANS[i], "Percent of Scenes Solved:", success_rate_list[i], "Percent Solved")
+    plot_planning_time_results(T_PLANS, mean_list, success_rate_list)
+    fair_scene_total = 0
+    for j in fair_list:
+        if j == True:
+            fair_scene_total += 1
+    print("Number of Scenes Used for the Means:", fair_scene_total) # how many scenes used for the mean
 
 
 # =====================================================================
@@ -1415,5 +1443,5 @@ if __name__ == "__main__":
     run_optimization_test()
     print("\n=== Part 4: trajectory tracking ===")
     run_traj_tracker_unit_tests()
-    # print("\n=== Part 6: planning time analysis ===")   # slow (~3 min): run it once for your report
-    # run_planning_time_analysis()
+    print("\n=== Part 6: planning time analysis ===")   # slow (~3 min): run it once for your report
+    run_planning_time_analysis()

@@ -829,13 +829,15 @@ def get_best_trajectory(X_0, P_d, t_plan):
         if time.perf_counter() - t_start <= t_plan:
             loop_traj = sq_prm_planner(X_0, P_d)
             if loop_traj == None:
-                return None
+                continue
             else:
                 loop_traj_time = trajectory_duration(loop_traj)
                 if loop_traj_time < lowest_loop_traj_time:
                     lowest_loop_traj_time = loop_traj_time
                     lowest_loop_traj = loop_traj
-        return lowest_loop_traj
+        else:
+            break
+    return lowest_loop_traj
 
 
 

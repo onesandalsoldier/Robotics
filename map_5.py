@@ -88,6 +88,23 @@ MAPS = {
         "lidar_sees_obstacles": True,
     },
     # STUDENT TODO: add your own maps here (2 for simulation, 2 for the robot).
+    "l_sim": {
+            "walls": BOUNDARY_WALLS,
+            "circles": [(0.7, 0.05, 0.1), (0.7, 0.25, 0.1), (0.7, 0.45, 0.1), (0.9, 0.5, 0.1), (1.1, 0.5, 0.1)],
+            "lidar_sees_obstacles": True,
+        },
+    "long_wall_sim": {
+            "walls": BOUNDARY_WALLS,
+            "circles": [(0.82, -0.15, 0.1), (0.82, 0.05, 0.1), (0.82, 0.25, 0.1), (0.82, 0.45, 0.1), (0.82, 0.65, 0.1), (0.82, 0.85, 0.1), (0.82, 1.05, 0.1)],
+            "lidar_sees_obstacles": True,
+        },
+        # add actual snake sim
+    "zigzag_sim": {
+            "walls": BOUNDARY_WALLS,
+            "circles": [(0.575, -0.15, 0.1), (0.575, 0.00, 0.1), (0.725, -0.15, 0.1), (0.725, 0.05, 0.1), (0.725, 0.25, 0.1), (0.875, -0.15, 0.1), (0.875, 0.05, 0.1), (0.875, 0.25, 0.1), (0.875, 0.5, 0.1)],
+            "lidar_sees_obstacles": True,
+        },
+    
 }
 
 ACTIVE_MAP = "circles_sim"          # map loaded when the GUI starts

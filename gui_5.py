@@ -699,14 +699,23 @@ def stop_motors():
 # STUDENT TODO: get_calibration_pwms()
 # Return the list of positive PWM values to test, from 0 to 255.
 def get_calibration_pwms():
-    pass  # TODO: replace this with your implementation
+    pwms = list(range(95, 256, 15))
+    if pwms[-1] != 255:
+        pwms.append(255)
+    return pwms
 
 
 # STUDENT TODO: measure_wheel_speeds(delta_ticks_left, delta_ticks_right, dt)
 # The encoders counted delta_ticks_* in dt seconds.
 # Return (phi_dot_l, phi_dot_r) in rad/s, with sign.
 def measure_wheel_speeds(delta_ticks_left, delta_ticks_right, dt):
-    pass  # TODO: replace this with your implementation
+    if dt <= 0:
+        return 0.0, 0.0
+    rot_l = get_wheel_rotation_left(delta_ticks_left)
+    rot_r = get_wheel_rotation_right(delta_ticks_right)
+    if rot_l is None or rot_r is None:
+        return None
+    return rot_l / dt, rot_r / dt
 
 
 # PROVIDED - calibration routine and CSV saving (do not change)
@@ -882,8 +891,18 @@ def pwm_to_speed(wheel, pwm):
 #   cal_table[(wheel, -1)]  backward: same, with |pwm| and |speed|
 # Return 0 if |phi| is below the lowest speed the wheel reaches.
 def speed_to_pwm(wheel, phi):
-    pass  # TODO: replace this with your implementation
-
+    if phi == 0.0 or not cal_table:
+        return 0
+    sign = 1 if phi > 0 else -1
+    table = cal_table.get((wheel, sign))
+    if not table:
+        return 0
+    pwms = [p for p, _ in table]
+    speeds = [v for _, v in table]
+    if abs(phi) < speeds[0]:
+         return 0
+    abs_pwm = _interp(abs(phi), speeds, pwms)
+    return int(round(min(255, abs_pwm))) * sign
 
 # PROVIDED - pulses (do not change): speeds too low for the wheel are sent
 # as short PWM pulses, so the average speed is the one requested.
